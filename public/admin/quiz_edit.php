@@ -19,6 +19,8 @@ function render_q($qk, array $p, int $num): string
         . '<input type="hidden" name="preguntas[' . e($qk) . '][id]" value="' . (int)($p['id'] ?? 0) . '">'
         . '<label>Pregunta <span class="qnum">' . $num . '</span>'
         . '<textarea name="preguntas[' . e($qk) . '][texto]" maxlength="2000">' . e($p['texto'] ?? '') . '</textarea></label>'
+        . '<label>Justificación de la respuesta correcta <small>(opcional, se muestra al alumno al corregir)</small>'
+        . '<textarea name="preguntas[' . e($qk) . '][justificacion]" maxlength="2000" rows="2">' . e($p['justificacion'] ?? '') . '</textarea></label>'
         . '<p class="desc">Marcá con el círculo la opción correcta (2 a 6 opciones).</p><div class="olist">';
     foreach ($p['opciones'] as $ok => $o) $h .= render_o($qk, $ok, $o, (string)$ok === (string)($p['correcta'] ?? ''));
     return $h . '</div><div class="acciones"><button type="button" class="btn sm sec add-o">+ Opción</button>'
@@ -44,7 +46,7 @@ if ($id) {
     $opsByQ = [];
     foreach (q('SELECT o.* FROM options o JOIN questions qu ON qu.id=o.question_id WHERE qu.quiz_id=? ORDER BY o.orden, o.id', [$id]) as $o) $opsByQ[$o['question_id']][] = $o;
     foreach (q('SELECT * FROM questions WHERE quiz_id=? ORDER BY orden, id', [$id]) as $i => $p) {
-        $item = ['id' => (int)$p['id'], 'texto' => $p['texto'], 'opciones' => [], 'correcta' => null];
+        $item = ['id' => (int)$p['id'], 'texto' => $p['texto'], 'justificacion' => (string)($p['justificacion'] ?? ''), 'opciones' => [], 'correcta' => null];
         foreach ($opsByQ[$p['id']] ?? [] as $k => $o) {
             $item['opciones'][$k] = ['id' => (int)$o['id'], 'texto' => $o['texto']];
             if ($o['es_correcta']) $item['correcta'] = $k;
@@ -70,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_array($p)) continue;
         $pid = (int)($p['id'] ?? 0);
         if ($pid && !isset($dbQ[$pid])) $pid = 0;
-        $item = ['id' => $pid, 'texto' => trim((string)($p['texto'] ?? '')), 'opciones' => [], 'correcta' => $p['correcta'] ?? null];
+        $item = ['id' => $pid, 'texto' => trim((string)($p['texto'] ?? '')), 'justificacion' => mb_substr(trim((string)($p['justificacion'] ?? '')), 0, 2000), 'opciones' => [], 'correcta' => $p['correcta'] ?? null];
         foreach ((is_array($p['opciones'] ?? null) ? $p['opciones'] : []) as $ok => $o) {
             if (!is_array($o)) continue;
             $oid = (int)($o['id'] ?? 0);
@@ -147,10 +149,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($form['preguntas'] as $p) {
                 $qo++;
                 if ($p['id']) {
-                    q('UPDATE questions SET texto=?, orden=? WHERE id=? AND quiz_id=?', [$p['texto'], $qo, $p['id'], $id]);
+                    q('UPDATE questions SET texto=?, justificacion=?, orden=? WHERE id=? AND quiz_id=?', [$p['texto'], $p['justificacion'] ?: null, $qo, $p['id'], $id]);
                     $pid = $p['id'];
                 } else {
-                    q('INSERT INTO questions (quiz_id, texto, orden) VALUES (?,?,?)', [$id, $p['texto'], $qo]);
+                    q('INSERT INTO questions (quiz_id, texto, justificacion, orden) VALUES (?,?,?,?)', [$id, $p['texto'], $p['justificacion'] ?: null, $qo]);
                     $pid = (int)$pdo->lastInsertId();
                 }
                 $oo = 0;

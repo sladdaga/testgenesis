@@ -56,6 +56,50 @@ function migrar_materias(): array
     } else {
         $log[] = 'No hay exámenes sin materia.';
     }
+
+    // 6) Tabla intentos (inicio del examen por alumno, guardado en la base)
+    if ($existe('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?', ['intentos'])) {
+        $log[] = 'La tabla «intentos» ya existía.';
+    } else {
+        $pdo->exec('CREATE TABLE intentos (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            quiz_id INT UNSIGNED NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            apellido VARCHAR(100) NOT NULL,
+            email VARCHAR(190) NOT NULL,
+            curso VARCHAR(120) NOT NULL,
+            inicio DATETIME NOT NULL,
+            submission_id INT UNSIGNED NULL,
+            ip_hash CHAR(64) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_intento (quiz_id, email),
+            FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE,
+            FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $log[] = 'Se creó la tabla «intentos».';
+    }
+
+    // 7) Columna questions.justificacion
+    if ($existe('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['questions', 'justificacion'])) {
+        $log[] = 'La columna «questions.justificacion» ya existía.';
+    } else {
+        $pdo->exec('ALTER TABLE questions ADD COLUMN justificacion TEXT NULL AFTER texto');
+        $log[] = 'Se agregó la columna «questions.justificacion».';
+        // 8) Primera vez: cargar las justificaciones del examen Word 2019 y mostrar la revisión al alumno
+        $f = __DIR__ . '/../../scripts/datos_word2019.php';
+        if (is_file($f)) {
+            $datos = require $f;
+            $n = 0;
+            $up = $pdo->prepare('UPDATE questions SET justificacion=? WHERE texto=? AND justificacion IS NULL');
+            foreach ($datos as $d) {
+                if (!empty($d[3])) { $up->execute([$d[3], $d[0]]); $n += $up->rowCount(); }
+            }
+            if ($n > 0) {
+                q("UPDATE quizzes SET mostrar_resultado=1 WHERE titulo LIKE '%Word 2019%'");
+                $log[] = "Se cargaron {$n} justificaciones del examen Word 2019 y se activó la revisión para el alumno.";
+            }
+        }
+    }
     return $log;
 }
 
@@ -72,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 page_head('Actualizar base', true);
 echo '<h1>Actualizar base de datos</h1>'
-    . '<p class="desc">Agrega el soporte de materias / módulos. Es seguro ejecutarlo más de una vez.</p>';
+    . '<p class="desc">Agrega materias / módulos, el inicio del examen por alumno y las justificaciones de las respuestas. Es seguro ejecutarlo más de una vez.</p>';
 if ($error) echo '<div class="msg error">' . e($error) . '</div>';
 if ($log) {
     echo '<div class="card"><strong>Resultado</strong><ul>';

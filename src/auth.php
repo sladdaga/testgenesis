@@ -9,8 +9,10 @@ function admin_require(): void
     if (!admin_logged()) redirect('login.php');
     // Tras actualizar el código, si falta la migración de materias, llevar al admin a ejecutarla.
     if (basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'migrar.php') {
-        $hay = (int)q("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='quizzes' AND COLUMN_NAME='materia_id'")->fetchColumn();
-        if (!$hay) redirect('migrar.php');
+        $hay = (int)q("SELECT (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='quizzes' AND COLUMN_NAME='materia_id')
+            + (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='intentos')
+            + (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='questions' AND COLUMN_NAME='justificacion')")->fetchColumn();
+        if ($hay < 3) redirect('migrar.php');
     }
 }
 

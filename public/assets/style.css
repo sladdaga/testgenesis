@@ -187,3 +187,7 @@ tbody tr:hover td{background:var(--surface-2)}
 /* utilidades (sin estilos en línea por CSP) */
 .mb12{margin-bottom:12px}.mt10{margin-top:10px}.mt8{margin-top:8px}
 select.auto,input.auto{width:auto;margin:0}input.grow{flex:1;min-width:160px}
+
+/* Justificación en la revisión */
+.rev .just{margin:8px 0 0;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:.93rem;line-height:1.5}
+.rev .just .lbl{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:2px;color:var(--text)}
