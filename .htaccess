@@ -1,0 +1,12 @@
+# Protege el proyecto si el docroot apuntara a la raiz en vez de public/
+Options -Indexes
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule ^(src|sql|scripts)(/|$) - [F,L]
+RewriteRule ^config(\.sample)?\.php$ - [F,L]
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+<FilesMatch "^(config.*\.php|.*\.sql|\.gitignore)$">
+Require all denied
+</FilesMatch>
