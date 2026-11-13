@@ -31,8 +31,8 @@ $quizzes = q($sql, $filtro ? [$filtro] : [])->fetchAll();
 page_head('Mis cuestionarios', true);
 echo '<h1>Mis cuestionarios</h1><p><a class="btn" href="quiz_edit.php">+ Nuevo cuestionario</a></p>';
 if ($materias): ?>
-<form method="get" class="acciones" style="margin-bottom:12px">
-  <select name="materia" aria-label="Filtrar por materia" style="width:auto;margin:0">
+<form method="get" class="acciones mb12">
+  <select name="materia" aria-label="Filtrar por materia" class="auto">
     <option value="">Todas las materias</option>
     <?php foreach ($materias as $m): ?><option value="<?= (int)$m['id'] ?>"<?= (int)$m['id'] === $filtro ? ' selected' : '' ?>><?= e($m['nombre']) ?></option><?php endforeach; ?>
   </select>
@@ -52,7 +52,7 @@ foreach ($quizzes as $z):
     <strong><?= e($z['titulo']) ?></strong>
     <span class="badge <?= $z['activo'] ? '' : 'off' ?>"><?= $z['activo'] ? 'Abierto' : 'Cerrado' ?></span>
     <div class="desc"><?= (int)$z['npreg'] ?> preguntas · <?= (int)$z['envios'] ?> envíos · <?= e(fecha($z['created_at'])) ?></div>
-    <div class="acciones" style="margin-top:10px">
+    <div class="acciones mt10">
       <button class="btn sm sec" type="button" data-copy="<?= e(quiz_link($z['token'])) ?>">Copiar enlace</button>
       <a class="btn sm" href="results.php?id=<?= (int)$z['id'] ?>">Resultados</a>
       <a class="btn sm sec" href="quiz_edit.php?id=<?= (int)$z['id'] ?>">Editar</a>

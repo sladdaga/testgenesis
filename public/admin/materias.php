@@ -44,12 +44,12 @@ foreach ($materias as $m): ?>
   <div class="card">
     <strong><?= e($m['nombre']) ?></strong>
     <div class="desc"><?= (int)$m['nexam'] ?> exámenes</div>
-    <form method="post" class="acciones" style="margin-top:10px"><?= csrf_field() ?>
+    <form method="post" class="acciones mt10"><?= csrf_field() ?>
       <input type="hidden" name="accion" value="renombrar"><input type="hidden" name="id" value="<?= (int)$m['id'] ?>">
-      <input type="text" name="nombre" maxlength="150" required value="<?= e($m['nombre']) ?>" aria-label="Nuevo nombre" style="width:auto;flex:1;min-width:180px;margin:0">
+      <input type="text" name="nombre" maxlength="150" required value="<?= e($m['nombre']) ?>" aria-label="Nuevo nombre" class="auto grow">
       <button class="btn sm sec">Renombrar</button>
     </form>
-    <div class="acciones" style="margin-top:8px">
+    <div class="acciones mt8">
       <a class="btn sm" href="materia.php?id=<?= (int)$m['id'] ?>">Ver notas</a>
       <a class="btn sm sec" href="index.php?materia=<?= (int)$m['id'] ?>">Exámenes</a>
       <?php if ((int)$m['nexam'] === 0): ?>

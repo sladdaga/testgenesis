@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 page_head('Ingresar', true);
 ?>
-<div class="card" style="max-width:380px;margin:40px auto">
+<div class="card login">
   <h1>Ingresar</h1>
   <?php if ($error) echo '<div class="msg error">' . e($error) . '</div>'; ?>
   <form method="post">
