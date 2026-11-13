@@ -1,4 +1,10 @@
 <?php
+/** Versión del recurso (fecha de modificación) para que el navegador no use una copia vieja en caché. */
+function asset_v(string $f): int
+{
+    return (int)@filemtime(__DIR__ . '/../public/assets/' . $f);
+}
+
 function page_head(string $titulo, bool $admin = false): void
 {
     $base = $admin ? '../' : '';
@@ -6,7 +12,7 @@ function page_head(string $titulo, bool $admin = false): void
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
         . '<meta name="robots" content="noindex">'
         . '<title>' . e($titulo) . '</title>'
-        . '<link rel="stylesheet" href="' . $base . 'assets/style.css"></head><body>';
+        . '<link rel="stylesheet" href="' . $base . 'assets/style.css?v=' . asset_v('style.css') . '"></head><body>';
     if ($admin) {
         echo '<header class="top"><a class="brand" href="index.php">Cuestionarios</a>';
         if (admin_logged()) {
@@ -24,5 +30,5 @@ function page_head(string $titulo, bool $admin = false): void
 function page_foot(bool $admin = false): void
 {
     $base = $admin ? '../' : '';
-    echo '</main><script src="' . $base . 'assets/app.js"></script></body></html>';
+    echo '</main><script src="' . $base . 'assets/app.js?v=' . asset_v('app.js') . '"></script></body></html>';
 }
