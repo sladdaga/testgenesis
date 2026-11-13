@@ -20,14 +20,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('index.php');
 }
 
-$quizzes = q('SELECT z.*, (SELECT COUNT(*) FROM submissions s WHERE s.quiz_id=z.id) envios,
-                     (SELECT COUNT(*) FROM questions qu WHERE qu.quiz_id=z.id) npreg
-              FROM quizzes z ORDER BY z.created_at DESC')->fetchAll();
+$filtro = (int)($_GET['materia'] ?? 0);
+$materias = q('SELECT id, nombre FROM materias ORDER BY nombre')->fetchAll();
+$sql = 'SELECT z.*, m.nombre materia, (SELECT COUNT(*) FROM submissions s WHERE s.quiz_id=z.id) envios,
+               (SELECT COUNT(*) FROM questions qu WHERE qu.quiz_id=z.id) npreg
+        FROM quizzes z LEFT JOIN materias m ON m.id=z.materia_id'
+     . ($filtro ? ' WHERE z.materia_id=?' : '') . ' ORDER BY (m.nombre IS NULL), m.nombre, z.created_at DESC';
+$quizzes = q($sql, $filtro ? [$filtro] : [])->fetchAll();
 
 page_head('Mis cuestionarios', true);
 echo '<h1>Mis cuestionarios</h1><p><a class="btn" href="quiz_edit.php">+ Nuevo cuestionario</a></p>';
-if (!$quizzes) echo '<p>Todavía no creaste cuestionarios.</p>';
-foreach ($quizzes as $z): ?>
+if ($materias): ?>
+<form method="get" class="acciones" style="margin-bottom:12px">
+  <select name="materia" aria-label="Filtrar por materia" style="width:auto;margin:0">
+    <option value="">Todas las materias</option>
+    <?php foreach ($materias as $m): ?><option value="<?= (int)$m['id'] ?>"<?= (int)$m['id'] === $filtro ? ' selected' : '' ?>><?= e($m['nombre']) ?></option><?php endforeach; ?>
+  </select>
+  <button class="btn sm sec">Filtrar</button>
+</form>
+<?php endif;
+if (!$quizzes) echo '<p>' . ($filtro ? 'No hay exámenes en esta materia.' : 'Todavía no creaste cuestionarios.') . '</p>';
+$grupoActual = false;
+foreach ($quizzes as $z):
+  $g = $z['materia_id'] === null ? 0 : (int)$z['materia_id'];
+  if ($grupoActual !== $g):
+    $grupoActual = $g; ?>
+  <h2><?= e($z['materia'] ?? 'Sin materia') ?>
+    <?php if ($g): ?><a class="btn sm sec" href="materia.php?id=<?= $g ?>">Ver notas</a><?php endif; ?></h2>
+<?php endif; ?>
   <div class="card">
     <strong><?= e($z['titulo']) ?></strong>
     <span class="badge <?= $z['activo'] ? '' : 'off' ?>"><?= $z['activo'] ? 'Abierto' : 'Cerrado' ?></span>

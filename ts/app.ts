@@ -40,6 +40,29 @@
     });
   });
 
+  // Temporizador del examen (el servidor valida el límite real)
+  const reloj = document.getElementById('reloj');
+  const relojV = document.getElementById('reloj-v');
+  const qform = document.getElementById('qform') as HTMLFormElement | null;
+  if (reloj && relojV && qform) {
+    const fin = Date.now() + (parseInt(reloj.getAttribute('data-restante') ?? '0', 10) || 0) * 1000;
+    let enviado = false;
+    const pintar = (): void => {
+      const seg = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
+      const m = Math.floor(seg / 60);
+      relojV.textContent = String(m).padStart(2, '0') + ':' + String(seg % 60).padStart(2, '0');
+      reloj.classList.toggle('aviso', seg <= 600 && seg > 300);
+      reloj.classList.toggle('critico', seg <= 300);
+      if (seg <= 0 && !enviado) {
+        enviado = true;
+        qform.noValidate = true; // enviar lo que haya, aunque falten respuestas
+        qform.submit();
+      }
+    };
+    pintar();
+    window.setInterval(pintar, 1000);
+  }
+
   // Editor dinámico de preguntas
   const box = document.getElementById('preguntas');
   if (!box) return;

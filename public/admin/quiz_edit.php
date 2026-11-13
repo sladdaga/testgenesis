@@ -36,6 +36,9 @@ $nEnvios = $id ? (int)q('SELECT COUNT(*) FROM submissions WHERE quiz_id=?', [$id
 // Datos actuales (BD) como valor por defecto
 $form = ['titulo' => $quiz['titulo'] ?? '', 'descripcion' => $quiz['descripcion'] ?? '',
          'mostrar_resultado' => (int)($quiz['mostrar_resultado'] ?? 0), 'activo' => (int)($quiz['activo'] ?? 1), 'preguntas' => []];
+$form['materia_id'] = (int)($quiz['materia_id'] ?? ($_GET['materia'] ?? 0));
+$form['materia_nueva'] = '';
+$materias = q('SELECT id, nombre FROM materias ORDER BY nombre')->fetchAll();
 $dbQ = []; // id pregunta => [opciones ids]
 if ($id) {
     $opsByQ = [];
@@ -59,6 +62,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['descripcion'] = trim((string)($_POST['descripcion'] ?? ''));
     $form['mostrar_resultado'] = empty($_POST['mostrar_resultado']) ? 0 : 1;
     $form['activo'] = empty($_POST['activo']) ? 0 : 1;
+    $form['materia_id'] = (int)($_POST['materia_id'] ?? 0);
+    $form['materia_nueva'] = trim((string)($_POST['materia_nueva'] ?? ''));
     $form['preguntas'] = [];
     $raw = is_array($_POST['preguntas'] ?? null) ? $_POST['preguntas'] : [];
     foreach ($raw as $qk => $p) {
@@ -76,6 +81,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($form['titulo'] === '' || mb_strlen($form['titulo']) > 200) $errores[] = 'El título es obligatorio (máx. 200 caracteres).';
+    if ($form['materia_nueva'] !== '') {
+        if (mb_strlen($form['materia_nueva']) > 150) $errores[] = 'El nombre de la materia no puede superar 150 caracteres.';
+    } elseif (!q('SELECT id FROM materias WHERE id=?', [$form['materia_id']])->fetch()) {
+        $errores[] = 'Elegí una materia / módulo o escribí el nombre de una nueva.';
+    }
     if (!$form['preguntas']) $errores[] = 'Agregá al menos una pregunta.';
     $keepQ = [];
     $keepO = [];
@@ -112,16 +122,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo = db();
         try {
             $pdo->beginTransaction();
+            $mid = $form['materia_id'];
+            if ($form['materia_nueva'] !== '') {
+                $ex = q('SELECT id FROM materias WHERE nombre=?', [$form['materia_nueva']])->fetchColumn();
+                if ($ex) $mid = (int)$ex;
+                else {
+                    q('INSERT INTO materias (nombre) VALUES (?)', [$form['materia_nueva']]);
+                    $mid = (int)$pdo->lastInsertId();
+                }
+            }
             if ($id) {
-                q('UPDATE quizzes SET titulo=?, descripcion=?, mostrar_resultado=?, activo=? WHERE id=?',
-                    [$form['titulo'], $form['descripcion'] ?: null, $form['mostrar_resultado'], $form['activo'], $id]);
+                q('UPDATE quizzes SET materia_id=?, titulo=?, descripcion=?, mostrar_resultado=?, activo=? WHERE id=?',
+                    [$mid, $form['titulo'], $form['descripcion'] ?: null, $form['mostrar_resultado'], $form['activo'], $id]);
                 foreach ($dbQ as $pid => $oids) {
                     if (!in_array($pid, $keepQ, true)) { q('DELETE FROM questions WHERE id=?', [$pid]); continue; }
                     foreach ($oids as $oid) if (!in_array($oid, $keepO, true)) q('DELETE FROM options WHERE id=?', [$oid]);
                 }
             } else {
-                q('INSERT INTO quizzes (titulo, descripcion, token, activo, mostrar_resultado) VALUES (?,?,?,?,?)',
-                    [$form['titulo'], $form['descripcion'] ?: null, bin2hex(random_bytes(8)), $form['activo'], $form['mostrar_resultado']]);
+                q('INSERT INTO quizzes (materia_id, titulo, descripcion, token, activo, mostrar_resultado) VALUES (?,?,?,?,?,?)',
+                    [$mid, $form['titulo'], $form['descripcion'] ?: null, bin2hex(random_bytes(8)), $form['activo'], $form['mostrar_resultado']]);
                 $id = (int)$pdo->lastInsertId();
             }
             $qo = 0;
@@ -168,6 +187,16 @@ if ($errores) echo '<div class="msg error">' . implode('<br>', array_map('e', ar
   <input type="hidden" name="id" value="<?= $id ?>">
   <div class="card">
     <label>Título *<input type="text" name="titulo" maxlength="200" required value="<?= e($form['titulo']) ?>"></label>
+    <?php if ($materias): ?>
+    <label>Materia / módulo *<select name="materia_id">
+      <option value="">— Elegir —</option>
+      <?php foreach ($materias as $m): ?><option value="<?= (int)$m['id'] ?>"<?= (int)$m['id'] === $form['materia_id'] ? ' selected' : '' ?>><?= e($m['nombre']) ?></option><?php endforeach; ?>
+    </select></label>
+    <label>…o crear una nueva (opcional, tiene prioridad)<input type="text" name="materia_nueva" maxlength="150" value="<?= e($form['materia_nueva']) ?>"></label>
+    <?php else: ?>
+    <input type="hidden" name="materia_id" value="0">
+    <label>Materia / módulo * (todavía no hay ninguna: escribí el nombre para crearla)<input type="text" name="materia_nueva" maxlength="150" required value="<?= e($form['materia_nueva']) ?>"></label>
+    <?php endif; ?>
     <label>Descripción (opcional)<textarea name="descripcion" maxlength="2000"><?= e($form['descripcion']) ?></textarea></label>
     <label><input type="checkbox" name="mostrar_resultado" value="1" <?= $form['mostrar_resultado'] ? 'checked' : '' ?>> Mostrar nota y respuestas correctas al alumno al terminar</label>
     <label><input type="checkbox" name="activo" value="1" <?= $form['activo'] ? 'checked' : '' ?>> Abierto (recibe respuestas)</label>

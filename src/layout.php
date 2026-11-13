@@ -10,7 +10,8 @@ function page_head(string $titulo, bool $admin = false): void
     if ($admin) {
         echo '<header class="top"><a class="brand" href="index.php">Cuestionarios</a>';
         if (admin_logged()) {
-            echo '<nav><a href="index.php">Mis cuestionarios</a><a href="quiz_edit.php">Nuevo</a>'
+            echo '<nav><a href="index.php">Mis cuestionarios</a><a href="materias.php">Materias</a><a href="quiz_edit.php">Nuevo</a>'
+                . '<a href="migrar.php" style="opacity:.55;font-size:.8rem">Actualizar base</a>'
                 . '<form method="post" action="logout.php" class="inline">' . csrf_field()
                 . '<button class="link">Salir</button></form></nav>';
         }

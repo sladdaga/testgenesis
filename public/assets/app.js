@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-    var _a;
+    var _a, _b;
     document.querySelectorAll('form').forEach((f) => {
         f.addEventListener('submit', (ev) => {
             const c = f.getAttribute('data-confirm');
@@ -45,12 +45,33 @@
             }
         });
     });
+    const reloj = document.getElementById('reloj');
+    const relojV = document.getElementById('reloj-v');
+    const qform = document.getElementById('qform');
+    if (reloj && relojV && qform) {
+        const fin = Date.now() + (parseInt((_a = reloj.getAttribute('data-restante')) !== null && _a !== void 0 ? _a : '0', 10) || 0) * 1000;
+        let enviado = false;
+        const pintar = () => {
+            const seg = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
+            const m = Math.floor(seg / 60);
+            relojV.textContent = String(m).padStart(2, '0') + ':' + String(seg % 60).padStart(2, '0');
+            reloj.classList.toggle('aviso', seg <= 600 && seg > 300);
+            reloj.classList.toggle('critico', seg <= 300);
+            if (seg <= 0 && !enviado) {
+                enviado = true;
+                qform.noValidate = true;
+                qform.submit();
+            }
+        };
+        pintar();
+        window.setInterval(pintar, 1000);
+    }
     const box = document.getElementById('preguntas');
     if (!box)
         return;
     const tq = document.getElementById('tpl-q');
     const to = document.getElementById('tpl-o');
-    let nq = parseInt((_a = box.getAttribute('data-next')) !== null && _a !== void 0 ? _a : '', 10) || 100;
+    let nq = parseInt((_b = box.getAttribute('data-next')) !== null && _b !== void 0 ? _b : '', 10) || 100;
     const renum = () => {
         box.querySelectorAll('.qbox').forEach((q, i) => {
             q.querySelector('.qnum').textContent = String(i + 1);

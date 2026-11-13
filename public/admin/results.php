@@ -3,7 +3,7 @@ require __DIR__ . '/../../src/bootstrap.php';
 admin_require();
 
 $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
-$quiz = q('SELECT * FROM quizzes WHERE id=?', [$id])->fetch();
+$quiz = q('SELECT z.*, m.nombre materia FROM quizzes z LEFT JOIN materias m ON m.id=z.materia_id WHERE z.id=?', [$id])->fetch();
 if (!$quiz) { flash('Cuestionario no encontrado.', 'error'); redirect('index.php'); }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -60,6 +60,7 @@ foreach (q('SELECT o.* FROM options o JOIN questions qu ON qu.id=o.question_id W
 page_head('Resultados', true);
 ?>
 <h1><?= e($quiz['titulo']) ?></h1>
+<?php if ($quiz['materia_id']): ?><p class="desc">Materia / módulo: <a href="materia.php?id=<?= (int)$quiz['materia_id'] ?>"><?= e($quiz['materia']) ?></a></p><?php endif; ?>
 <p class="acciones">
   <a class="btn sm sec" href="index.php">&larr; Volver</a>
   <a class="btn sm" href="export.php?id=<?= $id ?>">Exportar CSV</a>
