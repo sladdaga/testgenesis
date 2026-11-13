@@ -10,7 +10,7 @@ $pdo = db();
 $pdo->beginTransaction();
 $token = bin2hex(random_bytes(8));
 q('INSERT INTO quizzes (titulo, descripcion, token, activo, mostrar_resultado) VALUES (?,?,?,?,?)',
-  ['Examen Cuestionario Integral: Curso Microsoft Word 2019', 'Examen de opción múltiple (31 preguntas).', $token, 1, 0]);
+  ['Examen Cuestionario Integral: Curso Microsoft Word 2019', 'Examen de opción múltiple (30 preguntas).', $token, 1, 0]);
 $qid = (int)$pdo->lastInsertId();
 foreach ($datos as $i => [$texto, $ops, $ok]) {
     q('INSERT INTO questions (quiz_id, texto, orden) VALUES (?,?,?)', [$qid, $texto, $i + 1]);

@@ -1,5 +1,5 @@
 <?php
-// Examen Word 2019 (31 preguntas). Formato: [pregunta, [opciones a-d], índice de la correcta 0-3]
+// Examen Word 2019 (30 preguntas). Formato: [pregunta, [opciones a-d], índice de la correcta 0-3]
 // Correctas según la clave de respuestas entregada por el docente (P2 = Ctrl + G, Word en español).
 return [
  ['¿Cuál es la diferencia estructural interna entre un archivo guardado en formato .docx y uno en formato .doc?',
@@ -62,6 +62,4 @@ return [
   ['Un comando para cambiar el color de la letra.','Un marcador de posición dinámico en el texto modelo que extraerá automáticamente el dato correspondiente de la lista de contactos para cada copia generada.','Una celda oculta de Excel.','Un filtro de correo no deseado.'],1,"Un campo combinado (por ejemplo «Nombre») es un marcador de posición que Word reemplaza automáticamente con los datos de cada registro de la lista de contactos."],
  ['¿Qué paso final se debe realizar para generar un documento nuevo que contenga todas las cartas personalizadas listas para revisar o imprimir individualmente?',
   ['Presionar Ctrl + P directamente.','Hacer clic en "Finalizar y combinar" → "Editar documentos individuales".','Guardar el archivo como plantilla .dotx.','Enviar por fax.'],1,"«Finalizar y combinar → Editar documentos individuales» genera un documento nuevo con todas las cartas personalizadas, listo para revisar o imprimir."],
- ['Si la lista de origen en Excel contiene 150 registros de clientes, ¿cuántas páginas personalizadas se generarán al ejecutar "Finalizar y combinar" en una plantilla de 1 sola página?',
-  ['1 página con los 150 nombres encimados.','150 páginas independientes, cada una con los datos personalizados de un cliente.','15 páginas de 10 clientes cada una.','Ninguna, marca error de sistema.'],1,"Word genera una carta personalizada por cada registro de la lista: con 150 registros se obtienen 150 páginas independientes."],
 ];
