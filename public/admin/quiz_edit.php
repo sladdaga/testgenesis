@@ -11,7 +11,7 @@ function render_o($qk, $ok, array $o, bool $checked): string
         . '<button type="button" class="btn sm sec del-o" title="Quitar opción">&times;</button></div>';
 }
 
-function render_q($qk, array $p, int $num): string
+function render_q($qk, array $p, int $num, string $token = ''): string
 {
     $maxk = 99;
     foreach ($p['opciones'] as $k => $_) if (is_int($k) && $k > $maxk) $maxk = $k;
@@ -21,6 +21,11 @@ function render_q($qk, array $p, int $num): string
         . '<textarea name="preguntas[' . e($qk) . '][texto]" maxlength="2000">' . e($p['texto'] ?? '') . '</textarea></label>'
         . '<label>Justificación de la respuesta correcta <small>(opcional, se muestra al alumno al corregir)</small>'
         . '<textarea name="preguntas[' . e($qk) . '][justificacion]" maxlength="2000" rows="2">' . e($p['justificacion'] ?? '') . '</textarea></label>'
+        . '<div class="imgbox">' . (!empty($p['tiene_img']) && !empty($p['id'])
+            ? '<img class="qimg" src="../img.php?t=' . e($token) . '&amp;p=' . (int)$p['id'] . '" alt="Imagen actual"><label class="chk"><input type="checkbox" name="preguntas[' . e($qk) . '][quitar_img]" value="1"> Quitar la imagen actual</label>'
+            : '')
+        . '<label>Imagen (opcional) <small>JPG, PNG, WebP o GIF, hasta 2 MB. Si subís una, reemplaza a la actual.</small>'
+        . '<input type="file" name="imagen[' . e($qk) . ']" accept="image/jpeg,image/png,image/webp,image/gif"></label></div>'
         . '<p class="desc">Marcá con el círculo la opción correcta (2 a 6 opciones).</p><div class="olist">';
     foreach ($p['opciones'] as $ok => $o) $h .= render_o($qk, $ok, $o, (string)$ok === (string)($p['correcta'] ?? ''));
     return $h . '</div><div class="acciones"><button type="button" class="btn sm sec add-o">+ Opción</button>'
@@ -42,11 +47,13 @@ $form['materia_id'] = (int)($quiz['materia_id'] ?? ($_GET['materia'] ?? 0));
 $form['materia_nueva'] = '';
 $materias = q('SELECT id, nombre FROM materias ORDER BY nombre')->fetchAll();
 $dbQ = []; // id pregunta => [opciones ids]
+$dbImg = []; // id pregunta => tiene imagen
 if ($id) {
     $opsByQ = [];
     foreach (q('SELECT o.* FROM options o JOIN questions qu ON qu.id=o.question_id WHERE qu.quiz_id=? ORDER BY o.orden, o.id', [$id]) as $o) $opsByQ[$o['question_id']][] = $o;
-    foreach (q('SELECT * FROM questions WHERE quiz_id=? ORDER BY orden, id', [$id]) as $i => $p) {
-        $item = ['id' => (int)$p['id'], 'texto' => $p['texto'], 'justificacion' => (string)($p['justificacion'] ?? ''), 'opciones' => [], 'correcta' => null];
+    foreach (q('SELECT id, texto, justificacion, (imagen_mime IS NOT NULL) tiene_img FROM questions WHERE quiz_id=? ORDER BY orden, id', [$id]) as $i => $p) {
+        $dbImg[(int)$p['id']] = (bool)$p['tiene_img'];
+        $item = ['tiene_img' => (bool)$p['tiene_img'], 'id' => (int)$p['id'], 'texto' => $p['texto'], 'justificacion' => (string)($p['justificacion'] ?? ''), 'opciones' => [], 'correcta' => null];
         foreach ($opsByQ[$p['id']] ?? [] as $k => $o) {
             $item['opciones'][$k] = ['id' => (int)$o['id'], 'texto' => $o['texto']];
             if ($o['es_correcta']) $item['correcta'] = $k;
@@ -73,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_array($p)) continue;
         $pid = (int)($p['id'] ?? 0);
         if ($pid && !isset($dbQ[$pid])) $pid = 0;
-        $item = ['id' => $pid, 'texto' => trim((string)($p['texto'] ?? '')), 'justificacion' => mb_substr(trim((string)($p['justificacion'] ?? '')), 0, 2000), 'opciones' => [], 'correcta' => $p['correcta'] ?? null];
+        $item = ['tiene_img' => $pid && !empty($dbImg[$pid]), 'quitar_img' => !empty($p['quitar_img']), 'id' => $pid, 'texto' => trim((string)($p['texto'] ?? '')), 'justificacion' => mb_substr(trim((string)($p['justificacion'] ?? '')), 0, 2000), 'opciones' => [], 'correcta' => $p['correcta'] ?? null];
         foreach ((is_array($p['opciones'] ?? null) ? $p['opciones'] : []) as $ok => $o) {
             if (!is_array($o)) continue;
             $oid = (int)($o['id'] ?? 0);
@@ -94,8 +101,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $keepQ = [];
     $keepO = [];
     $n = 0;
+    $imgs = []; // qk => [datos binarios, mime]
+    $permitidas = ['image/jpeg' => 1, 'image/png' => 1, 'image/webp' => 1, 'image/gif' => 1];
     foreach ($form['preguntas'] as $qk => &$p) {
         $n++;
+        $f = $_FILES['imagen'] ?? null;
+        $err = is_array($f) ? ($f['error'][$qk] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+        if ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE) {
+            $errores[] = "La imagen de la pregunta $n es demasiado grande (máx. 2 MB).";
+        } elseif ($err !== UPLOAD_ERR_NO_FILE) {
+            $tmp = $f['tmp_name'][$qk] ?? '';
+            $bin = ($err === UPLOAD_ERR_OK && is_uploaded_file($tmp)) ? file_get_contents($tmp) : false;
+            $info = $bin !== false ? @getimagesizefromstring($bin) : false;
+            if ($bin === false) $errores[] = "No se pudo subir la imagen de la pregunta $n.";
+            elseif (strlen($bin) > 2 * 1024 * 1024) $errores[] = "La imagen de la pregunta $n supera los 2 MB.";
+            elseif (!$info || !isset($permitidas[$info['mime']])) $errores[] = "El archivo de la pregunta $n no es una imagen JPG, PNG, WebP o GIF.";
+            else $imgs[$qk] = [$bin, $info['mime']];
+        }
         // Quitar opciones en blanco (las que tengan respuestas se detectan abajo por ausencia)
         $p['opciones'] = array_filter($p['opciones'], fn($o) => $o['texto'] !== '');
         if ($p['texto'] === '') $errores[] = "La pregunta $n no tiene texto.";
@@ -148,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $id = (int)$pdo->lastInsertId();
             }
             $qo = 0;
-            foreach ($form['preguntas'] as $p) {
+            foreach ($form['preguntas'] as $qk => $p) {
                 $qo++;
                 if ($p['id']) {
                     q('UPDATE questions SET texto=?, justificacion=?, orden=? WHERE id=? AND quiz_id=?', [$p['texto'], $p['justificacion'] ?: null, $qo, $p['id'], $id]);
@@ -157,6 +179,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     q('INSERT INTO questions (quiz_id, texto, justificacion, orden) VALUES (?,?,?,?)', [$id, $p['texto'], $p['justificacion'] ?: null, $qo]);
                     $pid = (int)$pdo->lastInsertId();
                 }
+                if (isset($imgs[$qk])) q('UPDATE questions SET imagen=?, imagen_mime=? WHERE id=? AND quiz_id=?', [$imgs[$qk][0], $imgs[$qk][1], $pid, $id]);
+                elseif (!empty($p['quitar_img'])) q('UPDATE questions SET imagen=NULL, imagen_mime=NULL WHERE id=? AND quiz_id=?', [$pid, $id]);
                 $oo = 0;
                 foreach ($p['opciones'] as $ok => $o) {
                     $oo++;
@@ -186,7 +210,7 @@ echo '<h1>' . ($id ? 'Editar cuestionario' : 'Nuevo cuestionario') . '</h1>';
 if ($nEnvios) echo '<div class="aviso">Este cuestionario ya tiene <strong>' . $nEnvios . '</strong> envíos. Podés corregir textos y agregar preguntas u opciones, pero no quitar preguntas u opciones que tengan respuestas. Cambiar la opción correcta no recalcula las notas ya guardadas.</div>';
 if ($errores) echo '<div class="msg error">' . implode('<br>', array_map('e', array_unique($errores))) . '</div>';
 ?>
-<form method="post" action="quiz_edit.php<?= $id ? '?id=' . $id : '' ?>">
+<form method="post" enctype="multipart/form-data" action="quiz_edit.php<?= $id ? '?id=' . $id : '' ?>">
   <?= csrf_field() ?>
   <input type="hidden" name="id" value="<?= $id ?>">
   <div class="card">
@@ -207,7 +231,7 @@ if ($errores) echo '<div class="msg error">' . implode('<br>', array_map('e', ar
     <label><input type="checkbox" name="activo" value="1" <?= $form['activo'] ? 'checked' : '' ?>> Abierto (recibe respuestas)</label>
   </div>
   <div id="preguntas" data-next="<?= $maxq + 1 ?>">
-    <?php $i = 0; foreach ($form['preguntas'] as $qk => $p) echo render_q($qk, $p, ++$i); ?>
+    <?php $i = 0; foreach ($form['preguntas'] as $qk => $p) echo render_q($qk, $p, ++$i, (string)($quiz['token'] ?? '')); ?>
   </div>
   <p class="acciones"><button type="button" id="add-q" class="btn sec">+ Agregar pregunta</button>
   <button type="submit" class="btn" data-once>Guardar</button>

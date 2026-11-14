@@ -191,3 +191,7 @@ select.auto,input.auto{width:auto;margin:0}input.grow{flex:1;min-width:160px}
 /* Justificación en la revisión */
 .rev .just{margin:8px 0 0;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:.93rem;line-height:1.5}
 .rev .just .lbl{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-bottom:2px;color:var(--text)}
+
+.qimg{display:block;max-width:100%;height:auto;margin:6px auto 12px;border-radius:8px;border:1px solid var(--border)}
+.imgbox{margin:0 0 10px}
+.imgbox .qimg{max-width:320px;margin:6px 0}

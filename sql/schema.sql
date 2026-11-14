@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS questions (
   quiz_id INT UNSIGNED NOT NULL,
   texto TEXT NOT NULL,
   justificacion TEXT NULL,
+  imagen MEDIUMBLOB NULL,
+  imagen_mime VARCHAR(30) NULL,
   orden INT NOT NULL DEFAULT 0,
   FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

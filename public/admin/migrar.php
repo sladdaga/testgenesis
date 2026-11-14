@@ -109,6 +109,14 @@ function migrar_materias(): array
         $log[] = 'Se agregó la columna «quizzes.duracion_min».';
     }
 
+    // 9b) Imagen opcional por pregunta (guardada en la base: sobrevive a los deploys)
+    if ($existe('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['questions', 'imagen_mime'])) {
+        $log[] = 'Las columnas de imagen de «questions» ya existían.';
+    } else {
+        $pdo->exec('ALTER TABLE questions ADD COLUMN imagen MEDIUMBLOB NULL, ADD COLUMN imagen_mime VARCHAR(30) NULL');
+        $log[] = 'Se agregaron las columnas de imagen en «questions».';
+    }
+
     // 10) Exámenes predefinidos en scripts/examenes/*.php: se crean solo si no existe uno con el mismo título
     foreach (glob(__DIR__ . '/../../scripts/examenes/*.php') ?: [] as $f) {
         $ex = require $f;
@@ -133,6 +141,12 @@ function migrar_materias(): array
             foreach ($ex['preguntas'] as $i => $p) {
                 $iq->execute([$qid, $p[0], $p[3] ?? null, $i + 1]);
                 $pid = (int)$pdo->lastInsertId();
+                // Imagen opcional: quinto elemento = nombre de archivo en scripts/examenes/img/
+                $arch = isset($p[4]) ? realpath(__DIR__ . '/../../scripts/examenes/img/' . basename((string)$p[4])) : false;
+                $inf = $arch ? @getimagesize($arch) : false;
+                if ($inf && in_array($inf['mime'], ['image/jpeg', 'image/png', 'image/webp', 'image/gif'], true)) {
+                    q('UPDATE questions SET imagen=?, imagen_mime=? WHERE id=?', [file_get_contents($arch), $inf['mime'], $pid]);
+                }
                 foreach ($p[1] as $j => $texto) $io->execute([$pid, $texto, $j === $p[2] ? 1 : 0, $j + 1]);
             }
             $pdo->commit();

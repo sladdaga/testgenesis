@@ -48,7 +48,7 @@ if (isset($_GET['gracias'])) {
     }
     echo '</div>';
     if ($s && $quiz['mostrar_resultado']) {
-        $rows = q('SELECT qu.id qid, qu.texto, qu.justificacion, a.option_id,
+        $rows = q('SELECT qu.id qid, qu.texto, qu.justificacion, (qu.imagen_mime IS NOT NULL) tiene_img, a.option_id,
                     (SELECT GROUP_CONCAT(o2.texto SEPARATOR " / ") FROM options o2 WHERE o2.question_id=qu.id AND o2.es_correcta=1) correcta,
                     o.es_correcta, o.texto elegida
                    FROM questions qu
@@ -60,6 +60,7 @@ if (isset($_GET['gracias'])) {
             $ok = (bool)$r['es_correcta'];
             echo '<div class="card rev ' . ($ok ? 'rev-ok' : 'rev-ko') . '">'
                 . '<p class="preg"><span class="num">' . ($i + 1) . '</span><span>' . nl2br(e($r['texto'])) . '</span></p>'
+                . (!empty($r['tiene_img']) ? '<img class="qimg" src="img.php?t=' . e($token) . '&amp;p=' . (int)$r['qid'] . '" alt="Imagen de la pregunta ' . ($i + 1) . '" loading="lazy">' : '')
                 . '<p class="' . ($ok ? 'bien' : 'mal') . '"><span class="lbl">Tu respuesta</span> ' . ($r['elegida'] === null ? 'Sin responder' : e($r['elegida'])) . ($ok ? ' ✔' : ' ✘') . '</p>';
             if (!$ok) echo '<p class="bien corr"><span class="lbl">Correcta</span> ' . e($r['correcta']) . '</p>';
             if (!empty($r['justificacion'])) echo '<p class="just"><span class="lbl">Justificación</span> ' . nl2br(e($r['justificacion'])) . '</p>';
@@ -72,7 +73,7 @@ if (isset($_GET['gracias'])) {
 
 if (!$quiz['activo']) aviso('Cuestionario cerrado', 'Este cuestionario ya no recibe respuestas.', 403);
 
-$preguntas = q('SELECT id, texto FROM questions WHERE quiz_id=? ORDER BY orden, id', [$qid])->fetchAll();
+$preguntas = q('SELECT id, texto, (imagen_mime IS NOT NULL) tiene_img FROM questions WHERE quiz_id=? ORDER BY orden, id', [$qid])->fetchAll();
 $opts = [];
 foreach (q('SELECT o.id, o.question_id, o.texto, o.es_correcta FROM options o JOIN questions qu ON qu.id=o.question_id WHERE qu.quiz_id=? ORDER BY o.orden, o.id', [$qid]) as $o) {
     $opts[$o['question_id']][$o['id']] = $o;
@@ -224,6 +225,7 @@ if ($intento) {
   <?php foreach ($preguntas as $i => $p): ?>
     <fieldset class="card">
       <legend class="preg"><?= $i + 1 ?>. <?= nl2br(e($p['texto'])) ?></legend>
+      <?php if (!empty($p['tiene_img'])): ?><img class="qimg" src="img.php?t=<?= e($token) ?>&amp;p=<?= (int)$p['id'] ?>" alt="Imagen de la pregunta <?= $i + 1 ?>" loading="lazy"><?php endif; ?>
       <?php foreach ($opts[$p['id']] ?? [] as $o): ?>
         <label class="opt"><input type="radio" name="r[<?= (int)$p['id'] ?>]" value="<?= (int)$o['id'] ?>" required
           <?= ((string)($resp[$p['id']] ?? '') === (string)$o['id']) ? 'checked' : '' ?>> <span><?= e($o['texto']) ?></span></label>
