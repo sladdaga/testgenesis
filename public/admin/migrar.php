@@ -100,6 +100,48 @@ function migrar_materias(): array
             }
         }
     }
+
+    // 9) Columna quizzes.duracion_min (minutos por examen; vacío = duración de la configuración)
+    if ($existe('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['quizzes', 'duracion_min'])) {
+        $log[] = 'La columna «quizzes.duracion_min» ya existía.';
+    } else {
+        $pdo->exec('ALTER TABLE quizzes ADD COLUMN duracion_min SMALLINT UNSIGNED NULL AFTER mostrar_resultado');
+        $log[] = 'Se agregó la columna «quizzes.duracion_min».';
+    }
+
+    // 10) Exámenes predefinidos en scripts/examenes/*.php: se crean solo si no existe uno con el mismo título
+    foreach (glob(__DIR__ . '/../../scripts/examenes/*.php') ?: [] as $f) {
+        $ex = require $f;
+        if (!is_array($ex) || empty($ex['titulo']) || empty($ex['preguntas'])) continue;
+        if ($existe('SELECT COUNT(*) FROM quizzes WHERE titulo=?', [$ex['titulo']])) {
+            $log[] = 'El examen «' . $ex['titulo'] . '» ya existía.';
+            continue;
+        }
+        $pdo->beginTransaction();
+        try {
+            $mid = q('SELECT id FROM materias WHERE nombre=?', [$ex['materia']])->fetchColumn();
+            if (!$mid) {
+                q('INSERT INTO materias (nombre) VALUES (?)', [$ex['materia']]);
+                $mid = (int)$pdo->lastInsertId();
+                $log[] = 'Se creó la materia «' . $ex['materia'] . '».';
+            }
+            q('INSERT INTO quizzes (materia_id, titulo, descripcion, token, activo, mostrar_resultado, duracion_min) VALUES (?,?,?,?,1,1,?)',
+                [(int)$mid, $ex['titulo'], $ex['descripcion'] ?? null, bin2hex(random_bytes(8)), $ex['duracion_min'] ?? null]);
+            $qid = (int)$pdo->lastInsertId();
+            $iq = $pdo->prepare('INSERT INTO questions (quiz_id, texto, justificacion, orden) VALUES (?,?,?,?)');
+            $io = $pdo->prepare('INSERT INTO options (question_id, texto, es_correcta, orden) VALUES (?,?,?,?)');
+            foreach ($ex['preguntas'] as $i => $p) {
+                $iq->execute([$qid, $p[0], $p[3] ?? null, $i + 1]);
+                $pid = (int)$pdo->lastInsertId();
+                foreach ($p[1] as $j => $texto) $io->execute([$pid, $texto, $j === $p[2] ? 1 : 0, $j + 1]);
+            }
+            $pdo->commit();
+            $log[] = 'Se creó el examen «' . $ex['titulo'] . '» con ' . count($ex['preguntas']) . ' preguntas.';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+    }
     return $log;
 }
 

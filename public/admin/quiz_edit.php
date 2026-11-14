@@ -37,7 +37,7 @@ $nEnvios = $id ? (int)q('SELECT COUNT(*) FROM submissions WHERE quiz_id=?', [$id
 
 // Datos actuales (BD) como valor por defecto
 $form = ['titulo' => $quiz['titulo'] ?? '', 'descripcion' => $quiz['descripcion'] ?? '',
-         'mostrar_resultado' => (int)($quiz['mostrar_resultado'] ?? 0), 'activo' => (int)($quiz['activo'] ?? 1), 'preguntas' => []];
+         'duracion_min' => isset($quiz['duracion_min']) && $quiz['duracion_min'] !== null ? (string)(int)$quiz['duracion_min'] : '', 'mostrar_resultado' => (int)($quiz['mostrar_resultado'] ?? 0), 'activo' => (int)($quiz['activo'] ?? 1), 'preguntas' => []];
 $form['materia_id'] = (int)($quiz['materia_id'] ?? ($_GET['materia'] ?? 0));
 $form['materia_nueva'] = '';
 $materias = q('SELECT id, nombre FROM materias ORDER BY nombre')->fetchAll();
@@ -63,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['titulo'] = trim((string)($_POST['titulo'] ?? ''));
     $form['descripcion'] = trim((string)($_POST['descripcion'] ?? ''));
     $form['mostrar_resultado'] = empty($_POST['mostrar_resultado']) ? 0 : 1;
+    $form['duracion_min'] = trim((string)($_POST['duracion_min'] ?? ''));
     $form['activo'] = empty($_POST['activo']) ? 0 : 1;
     $form['materia_id'] = (int)($_POST['materia_id'] ?? 0);
     $form['materia_nueva'] = trim((string)($_POST['materia_nueva'] ?? ''));
@@ -83,6 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($form['titulo'] === '' || mb_strlen($form['titulo']) > 200) $errores[] = 'El título es obligatorio (máx. 200 caracteres).';
+    if ($form['duracion_min'] !== '' && (!ctype_digit($form['duracion_min']) || (int)$form['duracion_min'] < 1 || (int)$form['duracion_min'] > 600)) $errores[] = 'La duración debe ser un número de minutos entre 1 y 600, o quedar vacía.';
     if ($form['materia_nueva'] !== '') {
         if (mb_strlen($form['materia_nueva']) > 150) $errores[] = 'El nombre de la materia no puede superar 150 caracteres.';
     } elseif (!q('SELECT id FROM materias WHERE id=?', [$form['materia_id']])->fetch()) {
@@ -134,15 +136,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if ($id) {
-                q('UPDATE quizzes SET materia_id=?, titulo=?, descripcion=?, mostrar_resultado=?, activo=? WHERE id=?',
-                    [$mid, $form['titulo'], $form['descripcion'] ?: null, $form['mostrar_resultado'], $form['activo'], $id]);
+                q('UPDATE quizzes SET materia_id=?, titulo=?, descripcion=?, mostrar_resultado=?, duracion_min=?, activo=? WHERE id=?',
+                    [$mid, $form['titulo'], $form['descripcion'] ?: null, $form['mostrar_resultado'], $form['duracion_min'] === '' ? null : (int)$form['duracion_min'], $form['activo'], $id]);
                 foreach ($dbQ as $pid => $oids) {
                     if (!in_array($pid, $keepQ, true)) { q('DELETE FROM questions WHERE id=?', [$pid]); continue; }
                     foreach ($oids as $oid) if (!in_array($oid, $keepO, true)) q('DELETE FROM options WHERE id=?', [$oid]);
                 }
             } else {
-                q('INSERT INTO quizzes (materia_id, titulo, descripcion, token, activo, mostrar_resultado) VALUES (?,?,?,?,?,?)',
-                    [$mid, $form['titulo'], $form['descripcion'] ?: null, bin2hex(random_bytes(8)), $form['activo'], $form['mostrar_resultado']]);
+                q('INSERT INTO quizzes (materia_id, titulo, descripcion, token, activo, mostrar_resultado, duracion_min) VALUES (?,?,?,?,?,?,?)',
+                    [$mid, $form['titulo'], $form['descripcion'] ?: null, bin2hex(random_bytes(8)), $form['activo'], $form['mostrar_resultado'], $form['duracion_min'] === '' ? null : (int)$form['duracion_min']]);
                 $id = (int)$pdo->lastInsertId();
             }
             $qo = 0;
@@ -200,6 +202,7 @@ if ($errores) echo '<div class="msg error">' . implode('<br>', array_map('e', ar
     <label>Materia / módulo * (todavía no hay ninguna: escribí el nombre para crearla)<input type="text" name="materia_nueva" maxlength="150" required value="<?= e($form['materia_nueva']) ?>"></label>
     <?php endif; ?>
     <label>Descripción (opcional)<textarea name="descripcion" maxlength="2000"><?= e($form['descripcion']) ?></textarea></label>
+    <label>Duración en minutos <small>(vacío = usar la duración general de la configuración)</small><input type="number" name="duracion_min" min="1" max="600" step="1" value="<?= e($form['duracion_min']) ?>"></label>
     <label><input type="checkbox" name="mostrar_resultado" value="1" <?= $form['mostrar_resultado'] ? 'checked' : '' ?>> Mostrar nota y respuestas correctas al alumno al terminar</label>
     <label><input type="checkbox" name="activo" value="1" <?= $form['activo'] ? 'checked' : '' ?>> Abierto (recibe respuestas)</label>
   </div>

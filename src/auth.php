@@ -11,8 +11,9 @@ function admin_require(): void
     if (basename($_SERVER['SCRIPT_NAME'] ?? '') !== 'migrar.php') {
         $hay = (int)q("SELECT (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='quizzes' AND COLUMN_NAME='materia_id')
             + (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='intentos')
-            + (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='questions' AND COLUMN_NAME='justificacion')")->fetchColumn();
-        if ($hay < 3) redirect('migrar.php');
+            + (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='questions' AND COLUMN_NAME='justificacion')
+            + (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='quizzes' AND COLUMN_NAME='duracion_min')")->fetchColumn();
+        if ($hay < 4) redirect('migrar.php');
     }
 }
 

@@ -80,7 +80,7 @@ foreach (q('SELECT o.id, o.question_id, o.texto, o.es_correcta FROM options o JO
 if (!$preguntas) aviso('Cuestionario sin preguntas', 'Este cuestionario todavía no está listo.', 404);
 
 // ---- Temporizador (base de datos): el inicio se guarda por (examen, email) y no se reinicia ----
-$limite = max(0, (int)(config()['duracion_minutos'] ?? 90)) * 60;
+$limite = max(0, (int)($quiz['duracion_min'] ?? config()['duracion_minutos'] ?? 90)) * 60;
 $gracia = 60; // segundos de margen por demoras de conexión
 
 function tiempo_agotado(int $limite): never
