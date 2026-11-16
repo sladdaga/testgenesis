@@ -48,22 +48,35 @@ if (isset($_GET['gracias'])) {
     }
     echo '</div>';
     if ($s && $quiz['mostrar_resultado']) {
-        $rows = q('SELECT qu.id qid, qu.texto, qu.justificacion, (qu.imagen_mime IS NOT NULL) tiene_img, a.option_id,
-                    (SELECT GROUP_CONCAT(o2.texto SEPARATOR " / ") FROM options o2 WHERE o2.question_id=qu.id AND o2.es_correcta=1) correcta,
-                    o.es_correcta, o.texto elegida
-                   FROM questions qu
-                   LEFT JOIN answers a ON a.question_id=qu.id AND a.submission_id=?
-                   LEFT JOIN options o ON o.id=a.option_id
-                   WHERE qu.quiz_id=? ORDER BY qu.orden, qu.id', [$sid, $qid])->fetchAll();
+        [$pregs, $opsAll] = cargar_preguntas($qid);
+        $resAll = cargar_respuestas($qid, $pregs, (int)$sid)[(int)$sid] ?? [];
         echo '<h2 class="rev-tit">Revisión</h2>';
-        foreach ($rows as $i => $r) {
-            $ok = (bool)$r['es_correcta'];
+        foreach ($pregs as $i => $p) {
+            $pid = (int)$p['id'];
+            $ops = $opsAll[$pid] ?? [];
+            $resp = $resAll[$pid] ?? null;
+            $cal = calificar($p, $ops, $resp);
+            $ok = $cal['ok'];
+            $tipo = $p['tipo'];
             echo '<div class="card rev ' . ($ok ? 'rev-ok' : 'rev-ko') . '">'
-                . '<p class="preg"><span class="num">' . ($i + 1) . '</span><span>' . nl2br(e($r['texto'])) . '</span></p>'
-                . (!empty($r['tiene_img']) ? '<img class="qimg" src="img.php?t=' . e($token) . '&amp;p=' . (int)$r['qid'] . '" alt="Imagen de la pregunta ' . ($i + 1) . '" loading="lazy">' : '')
-                . '<p class="' . ($ok ? 'bien' : 'mal') . '"><span class="lbl">Tu respuesta</span> ' . ($r['elegida'] === null ? 'Sin responder' : e($r['elegida'])) . ($ok ? ' ✔' : ' ✘') . '</p>';
-            if (!$ok) echo '<p class="bien corr"><span class="lbl">Correcta</span> ' . e($r['correcta']) . '</p>';
-            if (!empty($r['justificacion'])) echo '<p class="just"><span class="lbl">Justificación</span> ' . nl2br(e($r['justificacion'])) . '</p>';
+                . '<p class="preg"><span class="num">' . ($i + 1) . '</span><span>' . nl2br(e($p['texto'])) . '</span></p>'
+                . (!empty($p['tiene_img']) ? '<img class="qimg" src="img.php?t=' . e($token) . '&amp;p=' . $pid . '" alt="Imagen de la pregunta ' . ($i + 1) . '" loading="lazy">' : '');
+            if ($tipo === 'cuadricula') {
+                echo '<p class="' . ($ok ? 'bien' : 'mal') . '"><span class="lbl">Puntos</span> ' . $cal['pts'] . '/' . $cal['total'] . ' filas correctas</p>'
+                    . '<div class="tw"><table class="rev-grid"><tr><th>Fila</th><th>Tu respuesta</th><th>Correcta</th></tr>';
+                foreach (opciones_rol($ops, 'fila') as $fid => $f) {
+                    $elegida = isset($resp[$fid]) ? ($ops[$resp[$fid]]['texto'] ?? null) : null;
+                    $fok = isset($resp[$fid]) && (int)$resp[$fid] === (int)$f['correcta_id'];
+                    echo '<tr><td>' . e($f['texto']) . '</td><td class="' . ($fok ? 'bien' : 'mal') . '">' . ($elegida === null ? 'Sin responder' : e($elegida)) . ($fok ? ' ✔' : ' ✘') . '</td>'
+                        . '<td>' . ($fok ? '' : e($ops[(int)$f['correcta_id']]['texto'] ?? '')) . '</td></tr>';
+                }
+                echo '</table></div>';
+            } else {
+                $txt = resp_texto($p, $ops, $resp);
+                echo '<p class="' . ($ok ? 'bien' : 'mal') . '"><span class="lbl">Tu respuesta</span> ' . ($txt === '' ? 'Sin responder' : e($txt)) . ($ok ? ' ✔' : ' ✘') . '</p>';
+                if (!$ok) echo '<p class="bien corr"><span class="lbl">Correcta</span> ' . e(correcta_texto($p, $ops)) . '</p>';
+            }
+            if (!empty($p['justificacion'])) echo '<p class="just"><span class="lbl">Justificación</span> ' . nl2br(e($p['justificacion'])) . '</p>';
             echo '</div>';
         }
     }
@@ -73,11 +86,7 @@ if (isset($_GET['gracias'])) {
 
 if (!$quiz['activo']) aviso('Cuestionario cerrado', 'Este cuestionario ya no recibe respuestas.', 403);
 
-$preguntas = q('SELECT id, texto, (imagen_mime IS NOT NULL) tiene_img FROM questions WHERE quiz_id=? ORDER BY orden, id', [$qid])->fetchAll();
-$opts = [];
-foreach (q('SELECT o.id, o.question_id, o.texto, o.es_correcta FROM options o JOIN questions qu ON qu.id=o.question_id WHERE qu.quiz_id=? ORDER BY o.orden, o.id', [$qid]) as $o) {
-    $opts[$o['question_id']][$o['id']] = $o;
-}
+[$preguntas, $opts] = cargar_preguntas($qid);
 if (!$preguntas) aviso('Cuestionario sin preguntas', 'Este cuestionario todavía no está listo.', 404);
 
 // ---- Temporizador (base de datos): el inicio se guarda por (examen, email) y no se reinicia ----
@@ -167,27 +176,39 @@ if ($intento) {
             $errores[] = 'La sesión del formulario venció. Revisá tus respuestas y volvé a enviar.';
             $_SESSION['nonce'][$qid] = bin2hex(random_bytes(16));
         } else {
-            $elegidas = [];
+            $elegidas = []; // pregunta => respuesta normalizada
             foreach ($preguntas as $p) {
-                $oid = $resp[$p['id']] ?? null;
-                if (!is_string($oid) && !is_int($oid) || !isset($opts[$p['id']][(int)$oid])) {
+                $r = normalizar_resp($p, $opts[$p['id']] ?? [], $resp[$p['id']] ?? null, (bool)$tiempoAgotado);
+                if ($r === null) {
                     if ($tiempoAgotado) continue; // sin responder al vencer el tiempo: cuenta como incorrecta
                     $errores[] = 'Respondé todas las preguntas.';
                     break;
                 }
-                $elegidas[$p['id']] = (int)$oid;
+                $elegidas[$p['id']] = $r;
             }
             if (!$errores) {
                 $puntaje = 0;
-                foreach ($elegidas as $pid => $oid) $puntaje += (int)$opts[$pid][$oid]['es_correcta'];
+                $total = 0;
+                foreach ($preguntas as $p) {
+                    $cal = calificar($p, $opts[$p['id']] ?? [], $elegidas[$p['id']] ?? null);
+                    $puntaje += $cal['pts'];
+                    $total += $cal['total'];
+                }
+                $tipos = array_column($preguntas, 'tipo', 'id');
                 $pdo = db();
                 try {
                     $pdo->beginTransaction();
                     q('INSERT INTO submissions (quiz_id, nombre, apellido, email, curso, puntaje, total, ip_hash) VALUES (?,?,?,?,?,?,?,?)',
-                        [$qid, $intento['nombre'], $intento['apellido'], $intento['email'], $intento['curso'], $puntaje, count($preguntas), client_ip_hash()]);
+                        [$qid, $intento['nombre'], $intento['apellido'], $intento['email'], $intento['curso'], $puntaje, $total, client_ip_hash()]);
                     $sid = (int)$pdo->lastInsertId();
                     $st = $pdo->prepare('INSERT INTO answers (submission_id, question_id, option_id) VALUES (?,?,?)');
-                    foreach ($elegidas as $pid => $oid) $st->execute([$sid, $pid, $oid]);
+                    $si = esquema_tipos() ? $pdo->prepare('INSERT INTO answer_items (submission_id, question_id, row_id, option_id) VALUES (?,?,?,?)') : null;
+                    foreach ($elegidas as $pid => $r) {
+                        $tp = $tipos[$pid] ?? 'unica';
+                        if ($tp === 'multiple') foreach ($r as $oid) $si->execute([$sid, $pid, null, $oid]);
+                        elseif ($tp === 'cuadricula') foreach ($r as $fid => $oid) $si->execute([$sid, $pid, $fid, $oid]);
+                        else $st->execute([$sid, $pid, $r]);
+                    }
                     $u = q('UPDATE intentos SET submission_id=? WHERE id=? AND submission_id IS NULL', [$sid, (int)$intento['id']]);
                     if ($u->rowCount() !== 1) throw new RuntimeException('Intento ya enviado');
                     $pdo->commit();
@@ -226,10 +247,34 @@ if ($intento) {
     <fieldset class="card">
       <legend class="preg"><?= $i + 1 ?>. <?= nl2br(e($p['texto'])) ?></legend>
       <?php if (!empty($p['tiene_img'])): ?><img class="qimg" src="img.php?t=<?= e($token) ?>&amp;p=<?= (int)$p['id'] ?>" alt="Imagen de la pregunta <?= $i + 1 ?>" loading="lazy"><?php endif; ?>
-      <?php foreach ($opts[$p['id']] ?? [] as $o): ?>
-        <label class="opt"><input type="radio" name="r[<?= (int)$p['id'] ?>]" value="<?= (int)$o['id'] ?>" required
-          <?= ((string)($resp[$p['id']] ?? '') === (string)$o['id']) ? 'checked' : '' ?>> <span><?= e($o['texto']) ?></span></label>
-      <?php endforeach; ?>
+      <?php $ops = $opts[$p['id']] ?? []; $pid = (int)$p['id']; $rn = normalizar_resp($p, $ops, $resp[$pid] ?? null, true); ?>
+      <?php if ($p['tipo'] === 'desplegable'): ?>
+        <select name="r[<?= $pid ?>]" required aria-label="Respuesta a la pregunta <?= $i + 1 ?>">
+          <option value="">Elegir…</option>
+          <?php foreach (opciones_rol($ops, 'op') as $o): ?><option value="<?= (int)$o['id'] ?>"<?= $rn === (int)$o['id'] ? ' selected' : '' ?>><?= e($o['texto']) ?></option><?php endforeach; ?>
+        </select>
+      <?php elseif ($p['tipo'] === 'multiple'): ?>
+        <p class="desc">Marcá todas las correctas.</p>
+        <?php foreach (opciones_rol($ops, 'op') as $o): ?>
+          <label class="opt"><input type="checkbox" name="r[<?= $pid ?>][]" value="<?= (int)$o['id'] ?>"
+            <?= is_array($rn) && in_array((int)$o['id'], $rn, true) ? 'checked' : '' ?>> <span><?= e($o['texto']) ?></span></label>
+        <?php endforeach; ?>
+      <?php elseif ($p['tipo'] === 'cuadricula'): $cols = opciones_rol($ops, 'col'); ?>
+        <div class="grid-wrap"><table class="grid">
+          <tr><th></th><?php foreach ($cols as $c): ?><th scope="col"><?= e($c['texto']) ?></th><?php endforeach; ?></tr>
+          <?php foreach (opciones_rol($ops, 'fila') as $f): ?>
+          <tr><th scope="row"><?= e($f['texto']) ?></th>
+            <?php foreach ($cols as $c): ?><td><input type="radio" name="r[<?= $pid ?>][<?= (int)$f['id'] ?>]" value="<?= (int)$c['id'] ?>" required
+              aria-label="<?= e($f['texto'] . ': ' . $c['texto']) ?>"<?= is_array($rn) && ($rn[(int)$f['id']] ?? 0) === (int)$c['id'] ? ' checked' : '' ?>></td><?php endforeach; ?>
+          </tr>
+          <?php endforeach; ?>
+        </table></div>
+      <?php else: ?>
+        <?php foreach (opciones_rol($ops, 'op') as $o): ?>
+        <label class="opt"><input type="radio" name="r[<?= $pid ?>]" value="<?= (int)$o['id'] ?>" required
+          <?= $rn === (int)$o['id'] ? 'checked' : '' ?>> <span><?= e($o['texto']) ?></span></label>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </fieldset>
   <?php endforeach; ?>
   <button type="submit" class="btn" data-once>Enviar respuestas</button>

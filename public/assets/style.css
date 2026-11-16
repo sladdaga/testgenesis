@@ -195,3 +195,17 @@ select.auto,input.auto{width:auto;margin:0}input.grow{flex:1;min-width:160px}
 .qimg{display:block;max-width:100%;height:auto;margin:6px auto 12px;border-radius:8px;border:1px solid var(--border)}
 .imgbox{margin:0 0 10px}
 .imgbox .qimg{max-width:320px;margin:6px 0}
+
+/* ---- Tipos de pregunta ---- */
+.hidden{display:none!important}
+.opt input[type=checkbox]{width:22px;height:22px;flex:none;margin:0}
+fieldset.card select{width:100%;min-height:44px;margin-top:6px}
+.grid-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0 4px;border:1px solid var(--border);border-radius:var(--r)}
+table.grid{min-width:0;width:100%;font-size:.9rem}
+table.grid th,table.grid td{text-align:center;vertical-align:middle;padding:8px 10px}
+table.grid th[scope=row]{text-align:left;position:sticky;left:0;background:var(--surface-2);text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--text);white-space:normal;min-width:110px}
+table.grid th[scope=col]{white-space:normal;min-width:64px}
+table.grid input[type=radio]{width:24px;height:24px;margin:0}
+table.rev-grid{min-width:0}
+.rev-grid td.bien,.rev-grid td.mal{border-radius:0}
+.obox select.fcol{width:auto;max-width:42%;margin:0;flex:none}

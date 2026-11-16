@@ -70,7 +70,6 @@
     if (!box)
         return;
     const tq = document.getElementById('tpl-q');
-    const to = document.getElementById('tpl-o');
     let nq = parseInt((_b = box.getAttribute('data-next')) !== null && _b !== void 0 ? _b : '', 10) || 100;
     const renum = () => {
         box.querySelectorAll('.qbox').forEach((q, i) => {
@@ -84,32 +83,86 @@
         d.innerHTML = h;
         return d.firstElementChild;
     };
+    const aplicarTipo = (q) => {
+        const tipo = q.querySelector('select.tipo').value;
+        q.querySelectorAll('.blk').forEach((b) => {
+            var _a;
+            const activo = ((_a = b.getAttribute('data-for')) !== null && _a !== void 0 ? _a : '').split(' ').indexOf(tipo) >= 0;
+            b.classList.toggle('hidden', !activo);
+            b.querySelectorAll('input, select, button').forEach((c) => { c.disabled = !activo; });
+        });
+    };
+    const syncCols = (q) => {
+        const cols = [];
+        q.querySelectorAll('.cbox').forEach((c) => {
+            var _a;
+            const t = c.querySelector('.ctxt').value.trim();
+            if (t !== '')
+                cols.push([(_a = c.getAttribute('data-k')) !== null && _a !== void 0 ? _a : '', t]);
+        });
+        q.querySelectorAll('select.fcol').forEach((sel) => {
+            const actual = sel.value;
+            sel.innerHTML = '';
+            const o0 = document.createElement('option');
+            o0.value = '';
+            o0.textContent = 'Correcta…';
+            sel.appendChild(o0);
+            cols.forEach(([k, t]) => {
+                const o = document.createElement('option');
+                o.value = k;
+                o.textContent = t;
+                sel.appendChild(o);
+            });
+            sel.value = actual;
+        });
+    };
+    box.querySelectorAll('.qbox').forEach(aplicarTipo);
     document.getElementById('add-q').addEventListener('click', () => {
-        box.appendChild(html(tq, { __Q__: nq++, __O__: '' }));
+        const q = html(tq, { __Q__: nq++, __O__: '' });
+        box.appendChild(q);
+        aplicarTipo(q);
         renum();
     });
+    box.addEventListener('change', (ev) => {
+        const t = ev.target;
+        const q = t.closest('.qbox');
+        if (q && t.classList.contains('tipo'))
+            aplicarTipo(q);
+    });
+    box.addEventListener('input', (ev) => {
+        const t = ev.target;
+        const q = t.closest('.qbox');
+        if (q && t.classList.contains('ctxt'))
+            syncCols(q);
+    });
     box.addEventListener('click', (ev) => {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f;
         const t = ev.target;
         const q = t.closest('.qbox');
         if (!q)
             return;
         if (t.classList.contains('add-o')) {
-            const list = q.querySelector('.olist');
-            if (list.children.length >= 6) {
-                alert('Máximo 6 opciones.');
+            const list = q.querySelector((_a = t.getAttribute('data-lista')) !== null && _a !== void 0 ? _a : '.olist');
+            const max = parseInt((_b = list.getAttribute('data-max')) !== null && _b !== void 0 ? _b : '6', 10);
+            if (list.children.length >= max) {
+                alert('Máximo ' + max + '.');
                 return;
             }
-            const n = parseInt((_a = q.getAttribute('data-nexto')) !== null && _a !== void 0 ? _a : '', 10) || 100;
+            const n = parseInt((_c = q.getAttribute('data-nexto')) !== null && _c !== void 0 ? _c : '', 10) || 100;
             q.setAttribute('data-nexto', String(n + 1));
-            list.appendChild(html(to, { __Q__: (_b = q.getAttribute('data-q')) !== null && _b !== void 0 ? _b : '', __O__: n }));
+            const tpl = document.getElementById((_d = list.getAttribute('data-tpl')) !== null && _d !== void 0 ? _d : 'tpl-o');
+            list.appendChild(html(tpl, { __Q__: (_e = q.getAttribute('data-q')) !== null && _e !== void 0 ? _e : '', __O__: n }));
+            syncCols(q);
         }
         else if (t.classList.contains('del-o')) {
-            if (q.querySelectorAll('.obox').length <= 2) {
-                alert('Mínimo 2 opciones.');
+            const list = t.closest('.olist, .mlist, .clist, .flist');
+            const min = parseInt((_f = list.getAttribute('data-min')) !== null && _f !== void 0 ? _f : '2', 10);
+            if (list.children.length <= min) {
+                alert('Mínimo ' + min + '.');
                 return;
             }
             t.closest('.obox').remove();
+            syncCols(q);
         }
         else if (t.classList.contains('del-q')) {
             if (box.querySelectorAll('.qbox').length <= 1) {

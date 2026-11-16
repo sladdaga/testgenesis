@@ -117,6 +117,37 @@ function migrar_materias(): array
         $log[] = 'Se agregaron las columnas de imagen en «questions».';
     }
 
+    // 11) Tipos de pregunta (tanda 1: desplegable, multiple, cuadricula) y tabla answer_items
+    if ($existe('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['questions', 'tipo'])) {
+        $log[] = 'Las columnas de tipo de «questions» ya existían.';
+    } else {
+        $pdo->exec("ALTER TABLE questions ADD COLUMN tipo VARCHAR(20) NOT NULL DEFAULT 'unica' AFTER texto, ADD COLUMN config TEXT NULL");
+        $log[] = 'Se agregaron «questions.tipo» y «questions.config».';
+    }
+    if ($existe('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?', ['options', 'rol'])) {
+        $log[] = 'Las columnas de rol de «options» ya existían.';
+    } else {
+        $pdo->exec("ALTER TABLE options ADD COLUMN rol VARCHAR(10) NOT NULL DEFAULT 'op', ADD COLUMN correcta_id INT UNSIGNED NULL");
+        $log[] = 'Se agregaron «options.rol» y «options.correcta_id».';
+    }
+    if ($existe('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?', ['answer_items'])) {
+        $log[] = 'La tabla «answer_items» ya existía.';
+    } else {
+        $pdo->exec('CREATE TABLE answer_items (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            submission_id INT UNSIGNED NOT NULL,
+            question_id INT UNSIGNED NOT NULL,
+            row_id INT UNSIGNED NULL,
+            option_id INT UNSIGNED NULL,
+            texto TEXT NULL,
+            INDEX (submission_id, question_id),
+            FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE,
+            FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE RESTRICT,
+            FOREIGN KEY (option_id) REFERENCES options(id) ON DELETE RESTRICT
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+        $log[] = 'Se creó la tabla «answer_items».';
+    }
+
     // 10) Exámenes predefinidos en scripts/examenes/*.php: se crean solo si no existe uno con el mismo título
     foreach (glob(__DIR__ . '/../../scripts/examenes/*.php') ?: [] as $f) {
         $ex = require $f;

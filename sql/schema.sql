@@ -28,9 +28,11 @@ CREATE TABLE IF NOT EXISTS questions (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   quiz_id INT UNSIGNED NOT NULL,
   texto TEXT NOT NULL,
+  tipo VARCHAR(20) NOT NULL DEFAULT 'unica',
   justificacion TEXT NULL,
   imagen MEDIUMBLOB NULL,
   imagen_mime VARCHAR(30) NULL,
+  config TEXT NULL,
   orden INT NOT NULL DEFAULT 0,
   FOREIGN KEY (quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -41,6 +43,8 @@ CREATE TABLE IF NOT EXISTS options (
   texto VARCHAR(500) NOT NULL,
   es_correcta TINYINT(1) NOT NULL DEFAULT 0,
   orden INT NOT NULL DEFAULT 0,
+  rol VARCHAR(10) NOT NULL DEFAULT 'op', -- 'op' | 'fila' | 'col'
+  correcta_id INT UNSIGNED NULL, -- solo en 'fila': id de la 'col' correcta
   FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -67,6 +71,20 @@ CREATE TABLE IF NOT EXISTS answers (
   question_id INT UNSIGNED NOT NULL,
   option_id INT UNSIGNED NOT NULL,
   UNIQUE (submission_id, question_id),
+  FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE,
+  FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE RESTRICT,
+  FOREIGN KEY (option_id) REFERENCES options(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Respuestas de tipos multiples (una fila por casilla) y cuadricula (row_id = fila, option_id = columna elegida).
+CREATE TABLE IF NOT EXISTS answer_items (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  submission_id INT UNSIGNED NOT NULL,
+  question_id INT UNSIGNED NOT NULL,
+  row_id INT UNSIGNED NULL,
+  option_id INT UNSIGNED NULL,
+  texto TEXT NULL,
+  INDEX (submission_id, question_id),
   FOREIGN KEY (submission_id) REFERENCES submissions(id) ON DELETE CASCADE,
   FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE RESTRICT,
   FOREIGN KEY (option_id) REFERENCES options(id) ON DELETE RESTRICT

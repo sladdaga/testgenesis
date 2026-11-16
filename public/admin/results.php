@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('results.php?id=' . $id);
 }
 
-$preguntas = q('SELECT id, texto FROM questions WHERE quiz_id=? ORDER BY orden, id', [$id])->fetchAll();
+[$preguntas, $opts] = cargar_preguntas($id);
 
 // ---- Detalle de un envío ----
 if (isset($_GET['sub'])) {
@@ -25,15 +25,25 @@ if (isset($_GET['sub'])) {
     echo '<h1>' . e($s['nombre'] . ' ' . $s['apellido']) . '</h1>'
         . '<p class="desc">' . e($s['email']) . ' · ' . e($s['curso']) . ' · ' . e(fecha($s['created_at']))
         . ' · Nota: <strong>' . e(nota_fmt($s['puntaje'], $s['total'])) . ' / 10</strong> (' . (int)$s['puntaje'] . ' / ' . (int)$s['total'] . ')</p>';
-    $rows = q('SELECT qu.texto, o.texto elegida, o.es_correcta,
-                (SELECT GROUP_CONCAT(o2.texto SEPARATOR " / ") FROM options o2 WHERE o2.question_id=qu.id AND o2.es_correcta=1) correcta
-               FROM questions qu LEFT JOIN answers a ON a.question_id=qu.id AND a.submission_id=?
-               LEFT JOIN options o ON o.id=a.option_id WHERE qu.quiz_id=? ORDER BY qu.orden, qu.id', [$s['id'], $id])->fetchAll();
-    foreach ($rows as $i => $r) {
-        $ok = (bool)$r['es_correcta'];
-        echo '<div class="card"><p class="preg">' . ($i + 1) . '. ' . nl2br(e($r['texto'])) . '</p>'
-            . '<p class="' . ($ok ? 'bien' : 'mal') . '">Respondió: ' . e($r['elegida'] ?? '(sin respuesta)') . ($ok ? ' ✔' : ' ✘') . '</p>';
-        if (!$ok) echo '<p class="bien">Correcta: ' . e($r['correcta']) . '</p>';
+    $resS = cargar_respuestas($id, $preguntas, (int)$s['id'])[(int)$s['id']] ?? [];
+    foreach ($preguntas as $i => $p) {
+        $ops = $opts[$p['id']] ?? [];
+        $resp = $resS[$p['id']] ?? null;
+        $cal = calificar($p, $ops, $resp);
+        $ok = $cal['ok'];
+        $txt = resp_texto($p, $ops, $resp);
+        echo '<div class="card"><p class="preg">' . ($i + 1) . '. ' . nl2br(e($p['texto'])) . ' <small>[' . e(TIPOS_PREGUNTA[$p['tipo']] ?? $p['tipo']) . ']</small></p>';
+        if ($p['tipo'] === 'cuadricula') {
+            echo '<p class="' . ($ok ? 'bien' : 'mal') . '">Puntos: ' . $cal['pts'] . '/' . $cal['total'] . ' filas</p><div class="tw"><table><tr><th>Fila</th><th>Respondió</th><th>Correcta</th></tr>';
+            foreach (opciones_rol($ops, 'fila') as $fid => $f) {
+                $fok = isset($resp[$fid]) && (int)$resp[$fid] === (int)$f['correcta_id'];
+                echo '<tr><td>' . e($f['texto']) . '</td><td class="' . ($fok ? 'bien' : 'mal') . '">' . e(isset($resp[$fid]) ? ($ops[$resp[$fid]]['texto'] ?? '') : '(sin respuesta)') . ($fok ? ' ✔' : ' ✘') . '</td><td>' . e($ops[(int)$f['correcta_id']]['texto'] ?? '') . '</td></tr>';
+            }
+            echo '</table></div>';
+        } else {
+            echo '<p class="' . ($ok ? 'bien' : 'mal') . '">Respondió: ' . e($txt === '' ? '(sin respuesta)' : $txt) . ($ok ? ' ✔' : ' ✘') . '</p>';
+            if (!$ok) echo '<p class="bien">Correcta: ' . e(correcta_texto($p, $ops)) . '</p>';
+        }
         echo '</div>';
     }
     echo '<p><a class="btn sec" href="results.php?id=' . $id . '">Volver</a></p>';
@@ -50,12 +60,19 @@ if ($n) {
     foreach ($subs as $s) $sum += $s['total'] > 0 ? $s['puntaje'] / $s['total'] : 0;
     $prom = $sum / $n * 10;
 }
-$cuentas = [];
+$cuentas = [];  // pregunta => opción => cantidad (única, desplegable, múltiple)
+$cuentasF = []; // pregunta => fila => columna => cantidad (cuadrícula)
+$nResp = [];    // pregunta => envíos que la respondieron
 foreach (q('SELECT a.question_id, a.option_id, COUNT(*) c FROM answers a JOIN submissions s ON s.id=a.submission_id WHERE s.quiz_id=? GROUP BY a.question_id, a.option_id', [$id]) as $r) {
     $cuentas[$r['question_id']][$r['option_id']] = (int)$r['c'];
 }
-$opts = [];
-foreach (q('SELECT o.* FROM options o JOIN questions qu ON qu.id=o.question_id WHERE qu.quiz_id=? ORDER BY o.orden, o.id', [$id]) as $o) $opts[$o['question_id']][] = $o;
+foreach (q('SELECT a.question_id, a.row_id, a.option_id, COUNT(*) c FROM answer_items a JOIN submissions s ON s.id=a.submission_id WHERE s.quiz_id=? GROUP BY a.question_id, a.row_id, a.option_id', [$id]) as $r) {
+    if ($r['row_id'] === null) $cuentas[$r['question_id']][$r['option_id']] = (int)$r['c'];
+    else $cuentasF[$r['question_id']][$r['row_id']][$r['option_id']] = (int)$r['c'];
+}
+foreach (q('SELECT a.question_id, COUNT(DISTINCT a.submission_id) c FROM answer_items a JOIN submissions s ON s.id=a.submission_id WHERE s.quiz_id=? GROUP BY a.question_id', [$id]) as $r) {
+    $nResp[$r['question_id']] = (int)$r['c'];
+}
 
 page_head('Resultados', true);
 ?>
@@ -94,16 +111,26 @@ page_head('Resultados', true);
 
 <h2>Por pregunta</h2>
 <?php foreach ($preguntas as $i => $p):
-  $tot = array_sum($cuentas[$p['id']] ?? []); ?>
+  $tot = $p['tipo'] === 'multiple' ? ($nResp[$p['id']] ?? 0) : array_sum($cuentas[$p['id']] ?? []);
+  $ops = $opts[$p['id']] ?? []; ?>
   <div class="card">
-    <p class="preg"><?= $i + 1 ?>. <?= nl2br(e($p['texto'])) ?></p>
-    <?php foreach ($opts[$p['id']] ?? [] as $o):
+    <p class="preg"><?= $i + 1 ?>. <?= nl2br(e($p['texto'])) ?> <small>[<?= e(TIPOS_PREGUNTA[$p['tipo']] ?? $p['tipo']) ?>]</small></p>
+    <?php if ($p['tipo'] === 'cuadricula'): foreach (opciones_rol($ops, 'fila') as $f):
+      $cf = $cuentasF[$p['id']][$f['id']] ?? []; $totF = array_sum($cf); ?>
+      <p class="mt8"><strong><?= e($f['texto']) ?></strong></p>
+      <?php foreach (opciones_rol($ops, 'col') as $o):
+        $c = $cf[$o['id']] ?? 0; $pct = $totF ? round($c * 100 / $totF) : 0; $es = (int)$f['correcta_id'] === (int)$o['id']; ?>
+        <div class="barra <?= $es ? 'ok' : '' ?>">
+          <span class="t"><?= e($o['texto']) ?><?= $es ? ' ✔' : '' ?></span>
+          <progress max="100" value="<?= $pct ?>"></progress><span><?= $pct ?>% (<?= $c ?>)</span>
+        </div>
+      <?php endforeach; endforeach; else: foreach (opciones_rol($ops, 'op') as $o):
       $c = $cuentas[$p['id']][$o['id']] ?? 0; $pct = $tot ? round($c * 100 / $tot) : 0; ?>
       <div class="barra <?= $o['es_correcta'] ? 'ok' : '' ?>">
         <span class="t"><?= e($o['texto']) ?><?= $o['es_correcta'] ? ' ✔' : '' ?></span>
         <progress max="100" value="<?= $pct ?>"></progress><span><?= $pct ?>% (<?= $c ?>)</span>
       </div>
-    <?php endforeach; ?>
+    <?php endforeach; endif; ?>
   </div>
 <?php endforeach; endif; ?>
 <?php page_foot(true);

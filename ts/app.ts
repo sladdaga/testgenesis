@@ -67,7 +67,6 @@
   const box = document.getElementById('preguntas');
   if (!box) return;
   const tq = document.getElementById('tpl-q') as HTMLTemplateElement;
-  const to = document.getElementById('tpl-o') as HTMLTemplateElement;
   let nq = parseInt(box.getAttribute('data-next') ?? '', 10) || 100;
 
   const renum = (): void => {
@@ -84,9 +83,59 @@
     return d.firstElementChild!;
   };
 
+  // Muestra solo el bloque del tipo elegido; los campos de los otros bloques se deshabilitan (no se envían)
+  const aplicarTipo = (q: HTMLElement): void => {
+    const tipo = q.querySelector<HTMLSelectElement>('select.tipo')!.value;
+    q.querySelectorAll<HTMLElement>('.blk').forEach((b) => {
+      const activo = (b.getAttribute('data-for') ?? '').split(' ').indexOf(tipo) >= 0;
+      b.classList.toggle('hidden', !activo);
+      b.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input, select, button').forEach((c) => { c.disabled = !activo; });
+    });
+  };
+
+  // Regenera las opciones de "columna correcta" de cada fila según las columnas con texto
+  const syncCols = (q: HTMLElement): void => {
+    const cols: Array<[string, string]> = [];
+    q.querySelectorAll<HTMLElement>('.cbox').forEach((c) => {
+      const t = c.querySelector<HTMLInputElement>('.ctxt')!.value.trim();
+      if (t !== '') cols.push([c.getAttribute('data-k') ?? '', t]);
+    });
+    q.querySelectorAll<HTMLSelectElement>('select.fcol').forEach((sel) => {
+      const actual = sel.value;
+      sel.innerHTML = '';
+      const o0 = document.createElement('option');
+      o0.value = '';
+      o0.textContent = 'Correcta…';
+      sel.appendChild(o0);
+      cols.forEach(([k, t]) => {
+        const o = document.createElement('option');
+        o.value = k;
+        o.textContent = t;
+        sel.appendChild(o);
+      });
+      sel.value = actual;
+    });
+  };
+
+  box.querySelectorAll<HTMLElement>('.qbox').forEach(aplicarTipo);
+
   document.getElementById('add-q')!.addEventListener('click', () => {
-    box.appendChild(html(tq, { __Q__: nq++, __O__: '' }));
+    const q = html(tq, { __Q__: nq++, __O__: '' }) as HTMLElement;
+    box.appendChild(q);
+    aplicarTipo(q);
     renum();
+  });
+
+  box.addEventListener('change', (ev) => {
+    const t = ev.target as HTMLElement;
+    const q = t.closest<HTMLElement>('.qbox');
+    if (q && t.classList.contains('tipo')) aplicarTipo(q);
+  });
+
+  box.addEventListener('input', (ev) => {
+    const t = ev.target as HTMLElement;
+    const q = t.closest<HTMLElement>('.qbox');
+    if (q && t.classList.contains('ctxt')) syncCols(q);
   });
 
   box.addEventListener('click', (ev) => {
@@ -94,14 +143,20 @@
     const q = t.closest<HTMLElement>('.qbox');
     if (!q) return;
     if (t.classList.contains('add-o')) {
-      const list = q.querySelector('.olist')!;
-      if (list.children.length >= 6) { alert('Máximo 6 opciones.'); return; }
+      const list = q.querySelector<HTMLElement>(t.getAttribute('data-lista') ?? '.olist')!;
+      const max = parseInt(list.getAttribute('data-max') ?? '6', 10);
+      if (list.children.length >= max) { alert('Máximo ' + max + '.'); return; }
       const n = parseInt(q.getAttribute('data-nexto') ?? '', 10) || 100;
       q.setAttribute('data-nexto', String(n + 1));
-      list.appendChild(html(to, { __Q__: q.getAttribute('data-q') ?? '', __O__: n }));
+      const tpl = document.getElementById(list.getAttribute('data-tpl') ?? 'tpl-o') as HTMLTemplateElement;
+      list.appendChild(html(tpl, { __Q__: q.getAttribute('data-q') ?? '', __O__: n }));
+      syncCols(q);
     } else if (t.classList.contains('del-o')) {
-      if (q.querySelectorAll('.obox').length <= 2) { alert('Mínimo 2 opciones.'); return; }
+      const list = t.closest<HTMLElement>('.olist, .mlist, .clist, .flist')!;
+      const min = parseInt(list.getAttribute('data-min') ?? '2', 10);
+      if (list.children.length <= min) { alert('Mínimo ' + min + '.'); return; }
       t.closest('.obox')!.remove();
+      syncCols(q);
     } else if (t.classList.contains('del-q')) {
       if (box.querySelectorAll('.qbox').length <= 1) { alert('Debe haber al menos una pregunta.'); return; }
       q.remove();
