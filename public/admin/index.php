@@ -44,9 +44,11 @@ $grupoActual = false;
 foreach ($quizzes as $z):
   $g = $z['materia_id'] === null ? 0 : (int)$z['materia_id'];
   if ($grupoActual !== $g):
+    if ($grupoActual !== false) echo '</div>';
     $grupoActual = $g; ?>
   <h2><?= e($z['materia'] ?? 'Sin materia') ?>
     <?php if ($g): ?><a class="btn sm sec" href="materia.php?id=<?= $g ?>">Ver notas</a><?php endif; ?></h2>
+  <div class="qlist">
 <?php endif; ?>
   <div class="card">
     <strong><?= e($z['titulo']) ?></strong>
@@ -65,4 +67,5 @@ foreach ($quizzes as $z):
     </div>
   </div>
 <?php endforeach;
+if ($grupoActual !== false) echo '</div>';
 page_foot(true);
