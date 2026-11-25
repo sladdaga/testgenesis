@@ -23,7 +23,7 @@ function page_head(string $titulo, bool $admin = false): void
         }
         echo '</header>';
     }
-    echo '<main class="wrap">';
+    echo '<main class="wrap' . ($admin ? ' full' : '') . '">';
     if ($f = flash()) echo '<div class="msg ' . e($f[1]) . '">' . e($f[0]) . '</div>';
 }
 

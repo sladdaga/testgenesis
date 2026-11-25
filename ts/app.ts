@@ -17,6 +17,20 @@
     });
   });
 
+  // Mostrar / ocultar contraseña
+  document.querySelectorAll<HTMLButtonElement>('[data-toggle-pass]').forEach((b) => {
+    const inp = b.parentElement?.querySelector<HTMLInputElement>('input');
+    if (!inp) return;
+    b.hidden = false;
+    b.addEventListener('click', () => {
+      const ver = inp.type === 'password';
+      inp.type = ver ? 'text' : 'password';
+      b.textContent = ver ? 'Ocultar' : 'Mostrar';
+      b.setAttribute('aria-pressed', ver ? 'true' : 'false');
+      inp.focus();
+    });
+  });
+
   // Copiar enlace
   document.querySelectorAll<HTMLElement>('[data-copy]').forEach((b) => {
     b.addEventListener('click', () => {

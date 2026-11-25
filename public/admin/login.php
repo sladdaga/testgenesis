@@ -21,7 +21,7 @@ page_head('Ingresar', true);
   <form method="post">
     <?= csrf_field() ?>
     <label>Email<input type="email" name="email" required autocomplete="username"></label>
-    <label>Clave<input type="password" name="clave" required autocomplete="current-password"></label>
+    <label>Clave<span class="pass"><input type="password" name="clave" required autocomplete="current-password"><button type="button" class="pass-btn" data-toggle-pass aria-pressed="false" hidden>Mostrar</button></span></label>
     <button class="btn" type="submit">Entrar</button>
   </form>
 </div>

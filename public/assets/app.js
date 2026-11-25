@@ -22,6 +22,20 @@
                 ev.preventDefault();
         });
     });
+    document.querySelectorAll('[data-toggle-pass]').forEach((b) => {
+        var _a;
+        const inp = (_a = b.parentElement) === null || _a === void 0 ? void 0 : _a.querySelector('input');
+        if (!inp)
+            return;
+        b.hidden = false;
+        b.addEventListener('click', () => {
+            const ver = inp.type === 'password';
+            inp.type = ver ? 'text' : 'password';
+            b.textContent = ver ? 'Ocultar' : 'Mostrar';
+            b.setAttribute('aria-pressed', ver ? 'true' : 'false');
+            inp.focus();
+        });
+    });
     document.querySelectorAll('[data-copy]').forEach((b) => {
         b.addEventListener('click', () => {
             var _a;

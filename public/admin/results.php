@@ -110,6 +110,7 @@ page_head('Resultados', true);
 </table></div>
 
 <h2>Por pregunta</h2>
+<div class="qgrid">
 <?php foreach ($preguntas as $i => $p):
   $tot = $p['tipo'] === 'multiple' ? ($nResp[$p['id']] ?? 0) : array_sum($cuentas[$p['id']] ?? []);
   $ops = $opts[$p['id']] ?? []; ?>
@@ -132,5 +133,7 @@ page_head('Resultados', true);
       </div>
     <?php endforeach; endif; ?>
   </div>
-<?php endforeach; endif; ?>
+<?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php page_foot(true);
